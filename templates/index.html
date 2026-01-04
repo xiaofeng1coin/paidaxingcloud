@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>文件共享空间</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<!-- 添加 index-page 类，用于CSS区分 -->
+<body class="index-page">
+
+    <div class="layout-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-brands fa-dropbox"></i>
+                <span>派大星网盘</span>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-title">系统功能</div>
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item">
+                    <div style="display:flex; align-items:center;"><i class="fa-solid fa-chart-pie"></i> 管理后台</div>
+                </a>
+                <a href="{{ url_for('logout') }}" class="nav-item">
+                    <div style="display:flex; align-items:center;"><i class="fa-solid fa-arrow-right-from-bracket"></i> 退出登录</div>
+                </a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-title">文件筛选</div>
+                <div class="nav-item active" onclick="filterType('all', this)">
+                    <div style="display:flex; align-items:center;"><i class="fa-solid fa-folder-tree"></i> 全部</div>
+                    <span style="font-size:11px; color:#999;">{{ stats.total }}</span>
+                </div>
+                <div class="nav-item" onclick="filterType('image', this)">
+                    <div style="display:flex; align-items:center;"><i class="fa-regular fa-images"></i> 图片</div>
+                </div>
+                <div class="nav-item" onclick="filterType('video', this)">
+                    <div style="display:flex; align-items:center;"><i class="fa-solid fa-film"></i> 视频</div>
+                </div>
+                <div class="nav-item" onclick="filterType('doc', this)">
+                    <div style="display:flex; align-items:center;"><i class="fa-regular fa-file-lines"></i> 文档</div>
+                </div>
+            </div>
+
+            <div class="storage-box">
+                <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700;">
+                    <span>存储</span>
+                    <span>{{ disk.percent }}%</span>
+                </div>
+                <div class="progress"><div class="progress-bar" style="width: {{ disk.percent }}%"></div></div>
+                <div style="font-size:11px; color:var(--text-sub);">{{ disk.used }} / {{ disk.total }}</div>
+            </div>
+        </aside>
+
+        <!-- 主体内容 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="toolbar">
+                <div class="breadcrumb">
+                    <a href="{{ url_for('index') }}"><i class="fa-solid fa-house"></i></a>
+                    {% for crumb in breadcrumbs %}
+                        <i class="fa-solid fa-chevron-right" style="font-size: 10px; color:#d1d5db;"></i>
+                        <a href="{{ url_for('index', req_path=crumb.path) }}">{{ crumb.name }}</a>
+                    {% endfor %}
+                </div>
+
+                <div class="tools">
+                    <div class="search-wrapper">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="searchInput" placeholder="搜索...">
+                    </div>
+                    <div class="view-toggle">
+                        <button id="btnList" class="active" onclick="switchView('list')"><i class="fa-solid fa-list-ul"></i></button>
+                        <button id="btnGrid" onclick="switchView('grid')"><i class="fa-solid fa-border-all"></i></button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 文件列表区 -->
+            <div class="file-area">
+                <div id="fileContainer" class="file-container list-view">
+                    <!-- 列表表头 -->
+                    <div class="list-header">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" class="custom-checkbox" id="selectAll" onclick="toggleSelectAll(this)">
+                        </div>
+                        <div></div>
+                        <div>文件名</div>
+                        <div>大小</div>
+                        <div>修改日期</div>
+                        <div style="text-align:center;">操作</div>
+                    </div>
+
+                    {% if not items %}
+                        <div style="text-align:center; padding:60px 0; color:var(--text-sub);">
+                            <i class="fa-regular fa-folder-open" style="font-size:32px; color:#d1d5db; margin-bottom:10px;"></i>
+                            <p>此文件夹是空的</p>
+                        </div>
+                    {% endif %}
+
+                    {% for item in items %}
+                    <div class="file-item" data-name="{{ item.name }}" data-type="{{ 'folder' if item.is_dir else item.type }}">
+                        <div class="checkbox-wrapper" onclick="event.stopPropagation()">
+                            {% if not item.is_dir %}
+                                <input type="checkbox" class="custom-checkbox item-checkbox"
+                                       value="{{ url_for('download', req_path=item.rel_path) }}"
+                                       onchange="updateSelectionUI(this)">
+                            {% else %}
+                                <input type="checkbox" class="custom-checkbox" disabled style="opacity:0.2; cursor:default;">
+                            {% endif %}
+                        </div>
+
+                        <div class="file-icon">
+                            {% if item.is_dir %}<i class="fa-solid fa-folder icon-folder"></i>
+                            {% else %}
+                                {% if item.type == 'image' %}<i class="fa-regular fa-image icon-image"></i>
+                                {% elif item.type == 'video' %}<i class="fa-regular fa-file-video icon-video"></i>
+                                {% elif item.type == 'doc' %}<i class="fa-regular fa-file-word icon-doc"></i>
+                                {% elif item.type == 'code' %}<i class="fa-solid fa-code icon-code"></i>
+                                {% elif item.type == 'archive' %}<i class="fa-regular fa-file-zipper icon-archive"></i>
+                                {% else %}<i class="fa-regular fa-file" style="color:#9ca3af;"></i>{% endif %}
+                            {% endif %}
+                        </div>
+
+                        <div class="file-name">
+                            {% if item.is_dir %}
+                                <a href="{{ url_for('index', req_path=item.rel_path) }}">{{ item.name }}</a>
+                            {% else %}
+                                <a href="#" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}'); return false;">{{ item.name }}</a>
+                            {% endif %}
+                            {% if item.is_new %}<span class="badge-new">NEW</span>{% endif %}
+                        </div>
+
+                        <div class="file-meta">{{ item.size }}</div>
+                        <div class="file-meta" style="font-size:12px;">{{ item.mtime }}</div>
+                        <div class="actions">
+                            {% if not item.is_dir %}
+                                <button class="action-btn" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}')"><i class="fa-solid fa-eye"></i></button>
+                                <a href="{{ url_for('download', req_path=item.rel_path) }}" class="action-btn"><i class="fa-solid fa-download"></i></a>
+                                <button class="action-btn" onclick="showQR('{{ url_for('download', req_path=item.rel_path, _external=True) }}')"><i class="fa-solid fa-qrcode"></i></button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if readme %}
+                <div class="readme-section">
+                    <div class="readme-title"><i class="fa-brands fa-readme"></i> README</div>
+                    <div class="markdown-body">{{ readme | safe }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </main>
+    </div>
+
+    <div id="selectionBar" class="selection-bar">
+        <div class="selection-count">已选 <span id="selectCount" style="font-weight:700; color:#60a5fa;">0</span> 个</div>
+        <div class="selection-actions">
+            <button onclick="downloadSelectedFiles()">下载</button>
+            <button onclick="clearSelection()" style="background:transparent; color:#bbb; border:1px solid #666;">取消</button>
+        </div>
+    </div>
+
+    <!-- 弹窗部分保持不变 -->
+    <div id="previewModal" class="modal-overlay" onclick="closeModal('previewModal')">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span id="previewTitle" style="font-weight:700;">预览</span>
+                <div style="display:flex; gap:10px;">
+                    <a id="previewDl" href="#" class="download-pill">下载</a>
+                    <button onclick="closeModal('previewModal')" style="border:none; background:none; font-size:18px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="modal-body" id="previewContent"></div>
+        </div>
+    </div>
+
+    <div id="qrModal" class="modal-overlay" onclick="closeModal('qrModal')">
+        <div class="modal-card" style="width:300px; padding:20px; align-items:center; height:auto;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0;">手机扫码</h3>
+            <div id="qrcode" style="margin:10px;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
