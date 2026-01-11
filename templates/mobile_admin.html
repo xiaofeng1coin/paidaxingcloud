@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>控制台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='mobile.css') }}?v=4.0">
+    <style>
+        /* 后台特有样式补充 */
+        .stat-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            padding: 12px 16px;
+        }
+        .stat-card {
+            background: white; padding: 16px; border-radius: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .stat-val { font-size: 24px; font-weight: 700; color: var(--text-main); }
+        .stat-label { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+        
+        .tab-nav {
+            display: flex; background: white; padding: 0 16px;
+            border-bottom: 1px solid var(--border); margin-bottom: 15px;
+        }
+        .tab-btn {
+            flex: 1; text-align: center; padding: 14px 0;
+            font-size: 14px; font-weight: 500; color: var(--text-sub);
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        .admin-card {
+            background: white; padding: 16px; margin: 0 16px 12px 16px;
+            border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .row-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .tag { padding: 4px 8px; border-radius: 6px; font-size: 12px; background: #f2f2f7; color: var(--text-sub); }
+        .tag.green { background: #e8f5e9; color: #2e7d32; }
+        .tag.blue { background: #e3f2fd; color: #1565c0; }
+        .btn-sm { padding: 6px 12px; background: #f2f2f7; border-radius: 6px; border: none; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <header class="app-bar">
+        <div class="app-bar-top">
+            <div class="brand"><i class="fa-solid fa-gauge-high"></i> 控制台</div>
+            <div class="actions">
+                <button onclick="location.href='{{ url_for('index', view='mobile') }}'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 统计卡片 -->
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-val">{{ stats.total_downloads }}</div>
+            <div class="stat-label">下载次数</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val">{{ stats.total_views }}</div>
+            <div class="stat-label">预览次数</div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    {% set active_tab = request.args.get('tab', 'shares') %}
+    <div class="tab-nav">
+        <div class="tab-btn {{ 'active' if active_tab == 'shares' else '' }}" onclick="switchTab('shares')">分享链接</div>
+        <div class="tab-btn {{ 'active' if active_tab == 'logs' else '' }}" onclick="switchTab('logs')">系统日志</div>
+    </div>
+
+    <!-- Tab: Shares -->
+    <div id="view-shares" style="display: {{ 'block' if active_tab == 'shares' else 'none' }};">
+        {% for share in shares %}
+        <div class="admin-card">
+            <div class="row-between">
+                <span style="font-family:monospace; color:var(--primary); font-weight:600;">/{{ share.slug }}</span>
+                <span class="tag {{ 'red' if share.is_expired else 'green' }}">{{ '已过期' if share.is_expired else '有效' }}</span>
+            </div>
+            <div style="font-size:13px; color:#333; margin-bottom:10px; word-break:break-all;">{{ share.file_path }}</div>
+            <div class="row-between" style="border-top:1px solid #f2f2f7; padding-top:10px; margin-bottom:0;">
+                <span style="font-size:12px; color:#999;">下载: {{ share.downloads }}</span>
+                <a href="{{ url_for('delete_share', id=share.id) }}" class="btn-sm" style="color:#ff3b30;" onclick="return confirm('删除此分享?')">删除</a>
+            </div>
+        </div>
+        {% else %}
+        <div style="text-align:center; padding:30px; color:#999;">暂无分享链接</div>
+        {% endfor %}
+    </div>
+
+    <!-- Tab: Logs -->
+    <div id="view-logs" style="display: {{ 'block' if active_tab == 'logs' else 'none' }};">
+        {% for log in pagination.items %}
+        <div class="admin-card">
+            <div class="row-between">
+                <span style="font-size:12px; color:#999;">{{ log.timestamp.strftime('%m-%d %H:%M') }}</span>
+                <span class="tag {{ 'blue' if log.action=='down' else '' }}">{{ log.action }}</span>
+            </div>
+            <div style="font-size:13px; margin-top:5px; word-break:break-all;">{{ log.filename }}</div>
+            <div style="font-size:12px; color:#999; margin-top:5px;">IP: {{ log.ip_address }}</div>
+        </div>
+        {% endfor %}
+        
+        <div style="display:flex; justify-content:center; gap:15px; padding:20px;">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('admin_dashboard', page=pagination.prev_num, tab='logs', view='mobile') }}" class="btn-sm">上一页</a>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a href="{{ url_for('admin_dashboard', page=pagination.next_num, tab='logs', view='mobile') }}" class="btn-sm">下一页</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function switchTab(t) {
+            location.href = "?view=mobile&tab=" + t;
+        }
+    </script>
+</body>
+</html>

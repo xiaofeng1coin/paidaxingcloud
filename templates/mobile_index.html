@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>文件管理</title>
+    <!-- 引入 FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入 CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='mobile.css') }}?v=4.3">
+</head>
+<body>
+    <input type="hidden" id="currentPath" value="{{ current_path }}">
+    
+    <!-- 1. 顶部 App Bar -->
+    <header class="app-bar">
+        <div class="app-bar-top">
+            <div class="brand">
+                <i class="fa-brands fa-dropbox"></i> 派大星网盘
+            </div>
+            <div class="actions">
+                <!-- 菜单按钮，所有人可见 -->
+                <button onclick="toggleAdminMenu()"><i class="fa-solid fa-bars"></i></button>
+            </div>
+        </div>
+        
+        <!-- 2. 面包屑导航 -->
+        <div class="breadcrumb-scroll">
+            <a href="{{ url_for('index', view='mobile') }}" class="crumb-home"><i class="fa-solid fa-house"></i></a>
+            {% for crumb in breadcrumbs %}
+                <i class="fa-solid fa-chevron-right sep"></i>
+                <a href="{{ url_for('index', req_path=crumb.path, view='mobile') }}" class="crumb-item">{{ crumb.name }}</a>
+            {% endfor %}
+        </div>
+    </header>
+
+    <!-- 3. 文件列表区域 -->
+    <main class="file-list">
+        {% if not items %}
+        <div class="empty-state">
+            <i class="fa-regular fa-folder-open"></i>
+            <p>暂无文件</p>
+        </div>
+        {% endif %}
+
+        {% for item in items %}
+        <!-- 点击整个卡片触发逻辑 -->
+        <div class="file-card" onclick="handleItemTap('{{ item.name }}', '{{ item.rel_path }}', {{ 'true' if item.is_dir else 'false' }})">
+            <!-- 图标 -->
+            <div class="file-icon {{ item.type }}">
+                {% if item.is_dir %}<i class="fa-solid fa-folder"></i>
+                {% elif item.type == 'image' %}<i class="fa-regular fa-image"></i>
+                {% elif item.type == 'video' %}<i class="fa-regular fa-file-video"></i>
+                {% elif item.type == 'doc' %}<i class="fa-regular fa-file-word"></i>
+                {% elif item.type == 'code' %}<i class="fa-solid fa-code"></i>
+                {% elif item.type == 'archive' %}<i class="fa-regular fa-file-zipper"></i>
+                {% else %}<i class="fa-regular fa-file"></i>{% endif %}
+            </div>
+            
+            <!-- 信息 -->
+            <div class="file-info">
+                <div class="name">{{ item.name }}</div>
+                <div class="meta">{{ item.size }} · {{ item.mtime.split(' ')[0] }}</div>
+            </div>
+
+            <!-- 更多操作按钮 (阻止冒泡，避免误触进入文件夹) -->
+            <button class="more-btn" onclick="event.stopPropagation(); openActionSheet('{{ item.name }}', '{{ item.rel_path }}', {{ 'true' if item.is_dir else 'false' }})">
+                <i class="fa-solid fa-ellipsis"></i>
+            </button>
+        </div>
+        {% endfor %}
+        
+        <div style="height: 60px;"></div>
+    </main>
+
+    <!-- 4. 底部动作弹窗 (Action Sheet) -->
+    <div id="actionSheet" class="bottom-sheet-overlay" onclick="closeActionSheet()">
+        <div class="bottom-sheet" onclick="event.stopPropagation()">
+            <div class="sheet-header">
+                <div class="sheet-title" id="sheetFilename">FILENAME</div>
+            </div>
+            
+            <div class="sheet-grid">
+                <!-- 下载 -->
+                <div class="sheet-item" onclick="execDownload()">
+                    <div class="icon-box" style="color:#007aff;"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+                    <span>下载</span>
+                </div>
+                <!-- 预览 -->
+                <div class="sheet-item" onclick="execPreview()">
+                    <div class="icon-box" style="color:#34c759;"><i class="fa-solid fa-eye"></i></div>
+                    <span>预览</span>
+                </div>
+                
+                {% if is_admin %}
+                <!-- 重命名 -->
+                <div class="sheet-item" onclick="execRename()">
+                    <div class="icon-box" style="color:#ff9500;"><i class="fa-solid fa-pen-to-square"></i></div>
+                    <span>重命名</span>
+                </div>
+                <!-- 删除 -->
+                <div class="sheet-item" onclick="execDelete()">
+                    <div class="icon-box" style="color:#ff3b30;"><i class="fa-solid fa-trash-can"></i></div>
+                    <span>删除</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <button class="sheet-cancel" onclick="closeActionSheet()">取消</button>
+        </div>
+    </div>
+
+    <!-- 5. 右上角通用菜单 -->
+    <div id="adminMenu" class="admin-menu-overlay" onclick="toggleAdminMenu()">
+        <div class="admin-menu-list" onclick="event.stopPropagation()">
+            
+            <!-- A. 如果是管理员：显示管理功能 -->
+            {% if is_admin %}
+            <div class="menu-item" onclick="triggerUpload()">
+                <i class="fa-solid fa-cloud-arrow-up"></i> 上传文件
+            </div>
+            <div class="menu-item" onclick="createNewFolder()">
+                <i class="fa-solid fa-folder-plus"></i> 新建文件夹
+            </div>
+            <div class="menu-item" onclick="location.href='{{ url_for('admin_dashboard', view='mobile') }}'">
+                <i class="fa-solid fa-gauge-high"></i> 后台管理
+            </div>
+            <hr style="border:0; border-top:1px solid #eee; margin:0;">
+            {% else %}
+            <!-- B. 如果是普通用户：显示管理员登录入口 -->
+            <div class="menu-item" onclick="location.href='{{ url_for('admin_login') }}'">
+                <i class="fa-solid fa-user-shield"></i> 管理员登录
+            </div>
+            {% endif %}
+
+            <!-- 通用：退出登录 -->
+            <div class="menu-item" onclick="location.href='{{ url_for('logout') }}'" style="color:#ff3b30;">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> 退出登录
+            </div>
+        </div>
+    </div>
+    
+    {% if is_admin %}
+    <input type="file" id="mobileUploadInput" multiple style="display: none;">
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='mobile.js') }}?v=4.3"></script>
+</body>
+</html>

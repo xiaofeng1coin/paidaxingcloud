@@ -5,18 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>文件共享空间</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3.5">
 </head>
-<!-- 添加 index-page 类，用于CSS区分 -->
 <body class="index-page">
 
+    <input type="hidden" id="currentPath" value="{{ current_path }}">
+    <input type="file" id="uploadInput" multiple style="display: none;">
+
     <div class="layout-container">
-        <!-- 侧边栏 -->
         <aside class="sidebar">
             <div class="brand">
                 <i class="fa-brands fa-dropbox"></i>
                 <span>派大星网盘</span>
             </div>
+
+            {% if is_admin %}
+            <div class="nav-group">
+                <div class="nav-title">管理操作</div>
+                <div class="nav-item" onclick="triggerUpload()">
+                    <div style="display:flex; align-items:center;"><i class="fa-solid fa-cloud-arrow-up"></i> 上传文件</div>
+                </div>
+                <div class="nav-item" onclick="createNewFolder()">
+                    <div style="display:flex; align-items:center;"><i class="fa-solid fa-folder-plus"></i> 新建文件夹</div>
+                </div>
+            </div>
+            {% endif %}
 
             <div class="nav-group">
                 <div class="nav-title">系统功能</div>
@@ -34,7 +47,7 @@
                     <div style="display:flex; align-items:center;"><i class="fa-solid fa-folder-tree"></i> 全部</div>
                     <span style="font-size:11px; color:#999;">{{ stats.total }}</span>
                 </div>
-                <div class="nav-item" onclick="filterType('image', this)">
+                 <div class="nav-item" onclick="filterType('image', this)">
                     <div style="display:flex; align-items:center;"><i class="fa-regular fa-images"></i> 图片</div>
                 </div>
                 <div class="nav-item" onclick="filterType('video', this)">
@@ -55,9 +68,7 @@
             </div>
         </aside>
 
-        <!-- 主体内容 -->
         <main class="main-content">
-            <!-- 顶部栏 -->
             <header class="toolbar">
                 <div class="breadcrumb">
                     <a href="{{ url_for('index') }}"><i class="fa-solid fa-house"></i></a>
@@ -79,10 +90,8 @@
                 </div>
             </header>
 
-            <!-- 文件列表区 -->
             <div class="file-area">
                 <div id="fileContainer" class="file-container list-view">
-                    <!-- 列表表头 -->
                     <div class="list-header">
                         <div class="checkbox-wrapper">
                             <input type="checkbox" class="custom-checkbox" id="selectAll" onclick="toggleSelectAll(this)">
@@ -104,13 +113,15 @@
                     {% for item in items %}
                     <div class="file-item" data-name="{{ item.name }}" data-type="{{ 'folder' if item.is_dir else item.type }}">
                         <div class="checkbox-wrapper" onclick="event.stopPropagation()">
-                            {% if not item.is_dir %}
+                             <!-- 普通用户不能选文件夹下载，但管理员可以选文件夹进行删除 -->
+                             {% if is_admin or not item.is_dir %}
                                 <input type="checkbox" class="custom-checkbox item-checkbox"
-                                       value="{{ url_for('download', req_path=item.rel_path) }}"
+                                       value="{{ item.name }}"
+                                       data-url="{{ url_for('download', req_path=item.rel_path) }}"
                                        onchange="updateSelectionUI(this)">
-                            {% else %}
+                             {% else %}
                                 <input type="checkbox" class="custom-checkbox" disabled style="opacity:0.2; cursor:default;">
-                            {% endif %}
+                             {% endif %}
                         </div>
 
                         <div class="file-icon">
@@ -131,16 +142,26 @@
                             {% else %}
                                 <a href="#" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}'); return false;">{{ item.name }}</a>
                             {% endif %}
-                            {% if item.is_new %}<span class="badge-new">NEW</span>{% endif %}
                         </div>
 
                         <div class="file-meta">{{ item.size }}</div>
                         <div class="file-meta" style="font-size:12px;">{{ item.mtime }}</div>
                         <div class="actions">
                             {% if not item.is_dir %}
-                                <button class="action-btn" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}')"><i class="fa-solid fa-eye"></i></button>
-                                <a href="{{ url_for('download', req_path=item.rel_path) }}" class="action-btn"><i class="fa-solid fa-download"></i></a>
-                                <button class="action-btn" onclick="showQR('{{ url_for('download', req_path=item.rel_path, _external=True) }}')"><i class="fa-solid fa-qrcode"></i></button>
+                                <button class="action-btn" title="预览" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}')"><i class="fa-solid fa-eye"></i></button>
+                                <a href="{{ url_for('download', req_path=item.rel_path) }}" class="action-btn" title="下载"><i class="fa-solid fa-download"></i></a>
+                                <button class="action-btn" title="扫码" onclick="showQR('{{ url_for('download', req_path=item.rel_path, _external=True) }}')"><i class="fa-solid fa-qrcode"></i></button>
+                                {% if is_admin %}
+                                <button class="action-btn share-btn" title="分享外链" onclick="openShareModal('{{ item.rel_path }}', '{{ item.name }}')">
+                                    <i class="fa-solid fa-share-nodes"></i>
+                                </button>
+                                {% endif %}
+                            {% endif %}
+                            
+                            <!-- 管理员操作：重命名/删除 -->
+                            {% if is_admin %}
+                            <button class="action-btn" title="重命名" onclick="openRenameModal('{{ item.name }}')"><i class="fa-solid fa-pen"></i></button>
+                            <button class="action-btn" title="删除" style="color:#ef4444;" onclick="deleteSingle('{{ item.name }}')"><i class="fa-solid fa-trash"></i></button>
                             {% endif %}
                         </div>
                     </div>
@@ -157,15 +178,22 @@
         </main>
     </div>
 
+    <!-- 底部选择栏 -->
     <div id="selectionBar" class="selection-bar">
         <div class="selection-count">已选 <span id="selectCount" style="font-weight:700; color:#60a5fa;">0</span> 个</div>
         <div class="selection-actions">
-            <button onclick="downloadSelectedFiles()">下载</button>
+            <button onclick="downloadSelectedFiles()"><i class="fa-solid fa-download"></i> 下载</button>
+            {% if is_admin %}
+            <!-- 管理员批量操作 -->
+            <button onclick="deleteSelectedFiles()" style="color:#ef4444;"><i class="fa-solid fa-trash"></i> 删除</button>
+            {% endif %}
             <button onclick="clearSelection()" style="background:transparent; color:#bbb; border:1px solid #666;">取消</button>
         </div>
     </div>
 
-    <!-- 弹窗部分保持不变 -->
+    <!-- 弹窗部分 -->
+    
+    <!-- 预览弹窗 -->
     <div id="previewModal" class="modal-overlay" onclick="closeModal('previewModal')">
         <div class="modal-card" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -179,14 +207,111 @@
         </div>
     </div>
 
+    <!-- 二维码弹窗 -->
     <div id="qrModal" class="modal-overlay" onclick="closeModal('qrModal')">
         <div class="modal-card" style="width:300px; padding:20px; align-items:center; height:auto;" onclick="event.stopPropagation()">
-            <h3 style="margin-top:0;">手机扫码</h3>
+            <h3 style="margin-top:0; margin-bottom:20px;">手机扫码</h3>
             <div id="qrcode" style="margin:10px;"></div>
         </div>
     </div>
 
+    <!-- 分享弹窗 -->
+    <div id="shareModal" class="modal-overlay" onclick="closeModal('shareModal')">
+         <div class="modal-card" style="width:400px; height:auto; padding:0; overflow:visible;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span style="font-weight:700;"><i class="fa-solid fa-share-nodes"></i> 创建分享链接</span>
+                <button onclick="closeModal('shareModal')" style="border:none; background:none; font-size:18px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="padding: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 5px;">文件</label>
+                    <div id="shareFileName" style="font-weight: 500; color: #374151; word-break: break-all;"></div>
+                    <input type="hidden" id="shareFilePath">
+                </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 5px;">自定义后缀 (选填)</label>
+                        <input type="text" id="shareSlug" placeholder="默认随机" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    </div>
+                    <div style="width: 100px;">
+                        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 5px;">有效期</label>
+                        <select id="shareDuration" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">
+                            <option value="1">1 天</option>
+                            <option value="7" selected>7 天</option>
+                            <option value="30">30 天</option>
+                            <option value="forever">永久</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="shareResult" style="display: none; background: #ecfdf5; padding: 10px; border-radius: 6px; border: 1px solid #a7f3d0; margin-bottom: 15px;">
+                    <div style="font-size: 12px; color: #047857; margin-bottom: 4px;">链接已生成：</div>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="shareUrlResult" readonly style="flex: 1; border: none; background: transparent; font-size: 13px; color: #065f46; outline: none;">
+                        <button onclick="copyShareLink()" style="border: none; background: white; color: #059669; padding: 2px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid #10b981;">复制</button>
+                    </div>
+                </div>
+                <div id="shareError" style="display: none; color: #ef4444; font-size: 13px; margin-bottom: 15px;"></div>
+                <button onclick="submitShare()" id="btnCreateShare" style="width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">立即生成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传进度弹窗 -->
+    <div id="uploadProgressModal" class="modal-overlay">
+        <div class="modal-card" style="width:400px; padding:25px; height:auto; align-items:center;">
+            <h3 style="margin:0 0 15px 0;">正在上传</h3>
+            <div style="width:100%; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin-bottom:10px;">
+                <div id="progressBar" style="width:0%; height:100%; background:var(--primary); transition:width 0.2s;"></div>
+            </div>
+            <div style="width:100%; display:flex; justify-content:space-between; font-size:12px; color:#6b7280;">
+                <span id="uploadPercent">0%</span>
+                <span id="uploadSpeed">0 KB/s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建文件夹弹窗 -->
+    <div id="mkdirModal" class="modal-overlay" onclick="closeMkdirModal()">
+        <div class="modal-card" style="width:350px; padding:20px; height:auto; overflow:visible;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0;">新建文件夹</h3>
+            <input type="text" id="newFolderName" placeholder="请输入文件夹名称" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; margin:15px 0;">
+            <div style="display:flex; gap:10px; width:100%;">
+                <button onclick="submitMkdir()" style="flex:1; padding:10px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer;">创建</button>
+                <button onclick="closeMkdirModal()" style="padding:10px 20px; background:white; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重命名弹窗 -->
+    <div id="renameModal" class="modal-overlay" onclick="closeRenameModal()">
+        <div class="modal-card" style="width:350px; padding:20px; height:auto; overflow:visible;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0;">重命名</h3>
+            <input type="hidden" id="renameOldName">
+            <input type="text" id="renameNewName" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; margin:15px 0;">
+            <div style="display:flex; gap:10px; width:100%;">
+                <button onclick="submitRename()" style="flex:1; padding:10px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer;">保存</button>
+                <button onclick="closeRenameModal()" style="padding:10px 20px; background:white; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 (新增) -->
+    <div id="deleteFileModal" class="modal-overlay" onclick="closeDeleteFileModal()">
+        <div class="modal-card" style="width:350px; padding:20px; height:auto; overflow:visible;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0; color: #ef4444; display:flex; align-items:center; gap:10px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> 确认删除
+            </h3>
+            <p id="deleteConfirmMsg" style="margin: 15px 0; color: #374151; line-height: 1.5;">
+                确定要删除此文件吗？
+            </p>
+            <div style="display:flex; gap:10px; width:100%;">
+                <button onclick="executeFileDelete()" style="flex:1; padding:10px; background:#ef4444; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">删除</button>
+                <button onclick="closeDeleteFileModal()" style="padding:10px 20px; background:white; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="{{ url_for('static', filename='main.js') }}?v=3.5"></script>
 </body>
 </html>

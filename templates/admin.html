@@ -5,66 +5,394 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3.8">
+    <style>
+        /* ==== 头部按钮样式 ==== */
+        .header-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            color: #374151;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .header-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: #eff6ff;
+        }
+        .header-btn.logout {
+            color: #ef4444;
+            border-color: #fecaca;
+            background: #fef2f2;
+        }
+        .header-btn.logout:hover { background: #fee2e2; }
+
+        /* ==== 全屏弹性布局 ==== */
+        html, body { height: 100%; margin: 0; overflow: hidden; }
+
+        .admin-layout {
+            height: 100vh;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .layout-header-area { flex: 0 0 auto; }
+
+        .layout-content-area {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            margin-top: 15px;
+        }
+
+        .tab-pane {
+            height: 100%;
+            display: none; /* 默认隐藏 */
+            flex-direction: column;
+        }
+        /* 关键：active 类由后端渲染决定 */
+        .tab-pane.active { display: flex; }
+
+        .admin-table-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .table-scroll-area {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .log-table thead th {
+            position: sticky;
+            top: 0;
+            background: #f9fafb;
+            z-index: 10;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 20px;
+            border-bottom: 2px solid #e5e7eb;
+            padding: 0 10px;
+        }
+        .tab-btn {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tab-btn:hover { color: var(--primary); }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    </style>
 </head>
-<body style="background-color: #f3f4f6; overflow-y: auto;"> <!-- 显式允许滚动 -->
+<body style="background-color: #f3f4f6;">
+
+    <!-- 核心逻辑：从 URL 获取当前 Tab，默认为 shares -->
+    {% set active_tab = request.args.get('tab', 'shares') %}
 
     <div class="admin-layout">
-        <header class="admin-header">
-            <div class="admin-title">
-                <h2><i class="fa-solid fa-gauge-high" style="color: var(--primary); margin-right: 10px;"></i> 控制台</h2>
-            </div>
-            <div style="display:flex; gap:10px;">
-                <a href="{{ url_for('index') }}" class="action-btn" style="width:auto; padding:0 15px;">返回前台</a>
-                <a href="{{ url_for('logout') }}" class="action-btn" style="width:auto; padding:0 15px; color:#ef4444; border-color:#fecaca;">退出</a>
-            </div>
-        </header>
+        
+        <div class="layout-header-area">
+            <!-- Header -->
+            <header class="admin-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                <div class="admin-title">
+                    <h2 style="margin:0; font-size:24px;"><i class="fa-solid fa-gauge-high" style="color: var(--primary); margin-right: 10px;"></i> 控制台</h2>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <a href="{{ url_for('index') }}" class="header-btn">返回前台</a>
+                    <a href="{{ url_for('logout') }}" class="header-btn logout">退出</a>
+                </div>
+            </header>
 
-        <div class="stat-grid">
-            <div class="stat-card">
-                <div style="color:var(--text-sub); font-size:12px;">下载</div>
-                <div class="stat-number">{{ stats.total_downloads }}</div>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div style="margin-bottom: 15px;">
+                    {% for category, message in messages %}
+                    <div style="background: {{ '#dcfce7' if category == 'success' else '#fee2e2' }}; color: {{ '#166534' if category == 'success' else '#b91c1c' }}; padding: 10px 15px; border-radius: 8px; border: 1px solid {{ '#bbf7d0' if category == 'success' else '#fecaca' }};">
+                        <i class="fa-solid {{ 'fa-check' if category == 'success' else 'fa-circle-exclamation' }}"></i> {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            {% endwith %}
+
+            <!-- Stats -->
+            <div class="stat-grid" style="margin-bottom: 20px;">
+                <div class="stat-card">
+                    <div style="color:var(--text-sub); font-size:12px;">总下载次数</div>
+                    <div class="stat-number">{{ stats.total_downloads }}</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color:var(--text-sub); font-size:12px;">总预览次数</div>
+                    <div class="stat-number">{{ stats.total_views }}</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color:var(--text-sub); font-size:12px;">磁盘使用率 {{ stats.disk.percent }}%</div>
+                    <div class="progress" style="margin-top:10px;"><div class="progress-bar" style="width: {{ stats.disk.percent }}%"></div></div>
+                    <div style="font-size:12px; color:var(--text-sub); margin-top:5px;">{{ stats.disk.used }} / {{ stats.disk.total }}</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div style="color:var(--text-sub); font-size:12px;">预览</div>
-                <div class="stat-number">{{ stats.total_views }}</div>
-            </div>
-            <div class="stat-card">
-                <div style="color:var(--text-sub); font-size:12px;">磁盘 {{ stats.disk.percent }}%</div>
-                <div class="progress" style="margin-top:10px;"><div class="progress-bar" style="width: {{ stats.disk.percent }}%"></div></div>
-                <div style="font-size:12px; color:var(--text-sub); margin-top:5px;">{{ stats.disk.used }} / {{ stats.disk.total }}</div>
+
+            <!-- Tabs: active 类现在由 Jinja2 渲染控制 -->
+            <div class="tab-nav">
+                <div class="tab-btn {{ 'active' if active_tab == 'shares' else '' }}" onclick="switchTab('shares')">
+                    <i class="fa-solid fa-share-nodes"></i> 外链管理
+                </div>
+                <div class="tab-btn {{ 'active' if active_tab == 'logs' else '' }}" onclick="switchTab('logs')">
+                    <i class="fa-solid fa-list-check"></i> 活动日志
+                </div>
             </div>
         </div>
 
-        <div style="background:white; border-radius:12px; border:1px solid #e5e7eb; overflow:hidden;">
-            <div style="padding:15px 20px; border-bottom:1px solid #e5e7eb; font-weight:700;">活动日志</div>
-            <div class="table-wrapper">
-                <table class="log-table">
-                    <thead>
-                        <tr>
-                            <th width="150">时间</th>
-                            <th width="80">动作</th>
-                            <th>文件名</th>
-                            <th width="120">IP</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in logs %}
-                        <tr>
-                            <td style="color:#6b7280; font-family:monospace; font-size:12px;">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td>
-                                {% if log.action == 'down' %}<span class="badge badge-blue">下载</span>
-                                {% elif log.action == 'view' %}<span class="badge badge-green">预览</span>
-                                {% else %}<span class="badge badge-yellow">登录</span>{% endif %}
-                            </td>
-                            <td style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ log.filename }}</td>
-                            <td style="font-family:monospace; font-size:12px;">{{ log.ip_address }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <div class="layout-content-area">
+            
+            <!-- Tab 1: 外链管理 -->
+            <div id="tab-shares" class="tab-pane {{ 'active' if active_tab == 'shares' else '' }}">
+                <div class="admin-table-container">
+                    <div style="padding:15px 20px; border-bottom:1px solid #e5e7eb; font-weight:700; display: flex; justify-content: space-between; align-items: center; background: white; flex: 0 0 auto;">
+                        <span>外链分享列表</span>
+                        <span style="font-size: 12px; font-weight: normal; color: #6b7280;">提示：请在前台文件列表中创建新分享</span>
+                    </div>
+                    
+                    <div class="table-scroll-area">
+                        <table class="log-table">
+                            <thead>
+                                <tr>
+                                    <th>分享地址 / 文件名</th>
+                                    <th width="150">过期时间</th>
+                                    <th width="80">下载数</th>
+                                    <th width="150">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if not shares %}
+                                <tr><td colspan="4" style="text-align: center; color: #9ca3af; padding: 40px;">暂无分享链接</td></tr>
+                                {% endif %}
+                                
+                                {% for share in shares %}
+                                <tr style="background: {{ '#fef2f2' if share.is_expired else 'transparent' }}; opacity: {{ '0.6' if share.is_expired else '1' }}">
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <a href="{{ url_for('index', req_path=share.slug) }}" target="_blank" style="color: var(--primary); font-weight: 600;">
+                                                /{{ share.slug }} <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 10px;"></i>
+                                            </a>
+                                            {% if share.is_expired %}
+                                            <span class="badge" style="background: #fee2e2; color: #b91c1c;">已过期</span>
+                                            {% endif %}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">{{ share.file_path }}</div>
+                                    </td>
+                                    <td style="font-family:monospace; font-size:12px;">
+                                        {{ share.expire_at.strftime('%Y-%m-%d %H:%M') if share.expire_at else '永久有效' }}
+                                    </td>
+                                    <td style="text-align: center;">{{ share.downloads }}</td>
+                                    <td>
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <button class="table-btn edit" onclick="openEditModal('{{ share.id }}', '{{ share.slug }}')">
+                                                <i class="fa-solid fa-pen-to-square"></i> 编辑
+                                            </button>
+                                            <button class="table-btn delete" onclick="openDeleteModal('{{ share.id }}')">
+                                                <i class="fa-solid fa-trash"></i> 删除
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: 活动日志 -->
+            <div id="tab-logs" class="tab-pane {{ 'active' if active_tab == 'logs' else '' }}">
+                <div class="admin-table-container">
+                    <div style="padding:15px 20px; border-bottom:1px solid #e5e7eb; font-weight:700; display:flex; justify-content:space-between; align-items:center; background: white; flex: 0 0 auto;">
+                        <span>系统日志</span>
+                        <!-- 这里的筛选表单加入了 hidden tab 字段 -->
+                        <form action="{{ url_for('admin_dashboard') }}" method="get" style="display:flex; align-items:center; gap:5px;">
+                            <input type="hidden" name="tab" value="logs">
+                            <span style="font-size:12px; color:#6b7280;">每页显示:</span>
+                            <select name="limit" onchange="this.form.submit()" style="font-size:12px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db;">
+                                <option value="20" {% if limit == 20 %}selected{% endif %}>20</option>
+                                <option value="50" {% if limit == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if limit == 100 %}selected{% endif %}>100</option>
+                            </select>
+                        </form>
+                    </div>
+
+                    <div class="table-scroll-area">
+                        <table class="log-table">
+                            <thead>
+                                <tr>
+                                    <th width="160">时间</th>
+                                    <th width="100">动作</th>
+                                    <th>相关文件 / 详情</th>
+                                    <th width="140">来源 IP</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in pagination.items %}
+                                <tr>
+                                    <td style="color:#6b7280; font-family:monospace; font-size:12px;">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>
+                                        {% if log.action == 'down' %}<span class="badge badge-blue">下载文件</span>
+                                        {% elif log.action == 'view' %}<span class="badge badge-green">在线预览</span>
+                                        {% elif log.action == 'share_down' %}<span class="badge" style="background:#f3e8ff; color:#7e22ce;">外链下载</span>
+                                        {% elif log.action == 'login' %}<span class="badge badge-yellow">用户登录</span>
+                                        {% else %}<span class="badge" style="background:#e5e7eb; color:#374151;">{{ log.action }}</span>{% endif %}
+                                    </td>
+                                    <td style="max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ log.filename }}">
+                                        {{ log.filename }}
+                                    </td>
+                                    <td style="font-family:monospace; font-size:12px;">{{ log.ip_address }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 分页控件：链接中加入了 tab='logs' -->
+                    <div style="padding:15px; display:flex; justify-content:space-between; align-items:center; background:#f9fafb; border-top:1px solid #e5e7eb; flex: 0 0 auto; font-size:13px; color:#6b7280;">
+                        <div>第 {{ pagination.page }} / {{ pagination.pages }} 页 (共 {{ pagination.total }} 条)</div>
+                        <div style="display:flex; gap:5px;">
+                            {% if pagination.has_prev %}
+                                <a href="{{ url_for('admin_dashboard', page=pagination.prev_num, limit=limit, tab='logs') }}" class="table-btn" style="background:white; border:1px solid #d1d5db;">上一页</a>
+                            {% else %}
+                                <span class="table-btn" style="background:#f3f4f6; border:1px solid #e5e7eb; color:#ccc; cursor:not-allowed;">上一页</span>
+                            {% endif %}
+                            
+                            {% if pagination.has_next %}
+                                <a href="{{ url_for('admin_dashboard', page=pagination.next_num, limit=limit, tab='logs') }}" class="table-btn" style="background:white; border:1px solid #d1d5db;">下一页</a>
+                            {% else %}
+                                <span class="table-btn" style="background:#f3f4f6; border:1px solid #e5e7eb; color:#ccc; cursor:not-allowed;">下一页</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 弹窗部分 (保持不变) -->
+    <div id="editModal" class="modal-overlay" onclick="closeEditModal()">
+        <div class="modal-card" style="width:400px; padding:20px; overflow:visible;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0; margin-bottom:20px;">编辑分享链接</h3>
+            <form action="{{ url_for('edit_share') }}" method="POST">
+                <input type="hidden" name="id" id="editId">
+                <div style="margin-bottom: 15px;">
+                    <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 5px;">自定义后缀</label>
+                    <input type="text" name="slug" id="editSlug" required style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 5px;">重置有效期</label>
+                    <select name="duration" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">
+                        <option value="">保持原样 (不修改)</option>
+                        <option value="1">重置为 1 天</option>
+                        <option value="7">重置为 7 天</option>
+                        <option value="30">重置为 30 天</option>
+                        <option value="forever">设置为 永久有效</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" style="flex:1; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">保存修改</button>
+                    <button type="button" onclick="closeEditModal()" style="padding: 10px 20px; background: transparent; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="deleteConfirmModal" class="modal-overlay" onclick="closeDeleteModal()">
+        <div class="modal-card" style="width:350px; padding:20px; height:auto; align-items:flex-start;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0; color:#ef4444; display:flex; align-items:center; gap:10px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> 确认删除
+            </h3>
+            <p style="margin:10px 0 20px 0; color:#4b5563;">确定要删除这个分享链接吗？此操作无法撤销。</p>
+            <div style="display:flex; gap:10px; width:100%;">
+                <button onclick="executeDelete()" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:600;">删除</button>
+                <button onclick="closeDeleteModal()" style="padding:10px 20px; background:white; color:#374151; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;">取消</button>
             </div>
         </div>
     </div>
+
+    <script>
+        // --- 纯前端交互逻辑 ---
+        
+        // Tab 切换只负责更新 URL (避免刷新) 和 DOM 类名
+        // 不再在页面加载时读取 localStorage，完全依赖 URL 参数
+        function switchTab(tabName) {
+            // 更新 UI
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            const index = tabName === 'shares' ? 0 : 1;
+            const btns = document.querySelectorAll('.tab-btn');
+            if(btns[index]) btns[index].classList.add('active');
+            
+            const pane = document.getElementById('tab-' + tabName);
+            if(pane) pane.classList.add('active');
+            
+            // 可选：静默更新 URL，方便用户刷新后停留（不跳转）
+            const url = new URL(window.location);
+            url.searchParams.set('tab', tabName);
+            window.history.replaceState({}, '', url);
+        }
+
+        // 弹窗相关逻辑保持不变
+        function openEditModal(id, slug) {
+            document.getElementById('editModal').style.display = 'flex';
+            document.getElementById('editId').value = id;
+            document.getElementById('editSlug').value = slug;
+        }
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+        
+        let deleteTargetId = null;
+        function openDeleteModal(id) {
+            deleteTargetId = id;
+            document.getElementById('deleteConfirmModal').style.display = 'flex';
+        }
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmModal').style.display = 'none';
+            deleteTargetId = null;
+        }
+        function executeDelete() {
+            if(deleteTargetId) {
+                window.location.href = "/admin/share/delete/" + deleteTargetId;
+            }
+        }
+    </script>
 </body>
 </html>
