@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3.8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4.0">
     <style>
         /* ==== 头部按钮样式 ==== */
         .header-btn {
@@ -64,7 +64,6 @@
             display: none; /* 默认隐藏 */
             flex-direction: column;
         }
-        /* 关键：active 类由后端渲染决定 */
         .tab-pane.active { display: flex; }
 
         .admin-table-container {
@@ -117,13 +116,11 @@
 </head>
 <body style="background-color: #f3f4f6;">
 
-    <!-- 核心逻辑：从 URL 获取当前 Tab，默认为 shares -->
     {% set active_tab = request.args.get('tab', 'shares') %}
 
     <div class="admin-layout">
         
         <div class="layout-header-area">
-            <!-- Header -->
             <header class="admin-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
                 <div class="admin-title">
                     <h2 style="margin:0; font-size:24px;"><i class="fa-solid fa-gauge-high" style="color: var(--primary); margin-right: 10px;"></i> 控制台</h2>
@@ -146,7 +143,6 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- Stats -->
             <div class="stat-grid" style="margin-bottom: 20px;">
                 <div class="stat-card">
                     <div style="color:var(--text-sub); font-size:12px;">总下载次数</div>
@@ -163,7 +159,6 @@
                 </div>
             </div>
 
-            <!-- Tabs: active 类现在由 Jinja2 渲染控制 -->
             <div class="tab-nav">
                 <div class="tab-btn {{ 'active' if active_tab == 'shares' else '' }}" onclick="switchTab('shares')">
                     <i class="fa-solid fa-share-nodes"></i> 外链管理
@@ -188,7 +183,8 @@
                         <table class="log-table">
                             <thead>
                                 <tr>
-                                    <th>分享地址 / 文件名</th>
+                                    <!-- 修改：添加 text-left 类 -->
+                                    <th class="text-left">分享地址 / 文件名</th>
                                     <th width="150">过期时间</th>
                                     <th width="80">下载数</th>
                                     <th width="150">操作</th>
@@ -201,7 +197,8 @@
                                 
                                 {% for share in shares %}
                                 <tr style="background: {{ '#fef2f2' if share.is_expired else 'transparent' }}; opacity: {{ '0.6' if share.is_expired else '1' }}">
-                                    <td>
+                                    <!-- 修改：添加 text-left 类 -->
+                                    <td class="text-left">
                                         <div style="display: flex; align-items: center; gap: 8px;">
                                             <a href="{{ url_for('index', req_path=share.slug) }}" target="_blank" style="color: var(--primary); font-weight: 600;">
                                                 /{{ share.slug }} <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 10px;"></i>
@@ -215,9 +212,9 @@
                                     <td style="font-family:monospace; font-size:12px;">
                                         {{ share.expire_at.strftime('%Y-%m-%d %H:%M') if share.expire_at else '永久有效' }}
                                     </td>
-                                    <td style="text-align: center;">{{ share.downloads }}</td>
+                                    <td>{{ share.downloads }}</td>
                                     <td>
-                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                        <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
                                             <button class="table-btn edit" onclick="openEditModal('{{ share.id }}', '{{ share.slug }}')">
                                                 <i class="fa-solid fa-pen-to-square"></i> 编辑
                                             </button>
@@ -239,16 +236,23 @@
                 <div class="admin-table-container">
                     <div style="padding:15px 20px; border-bottom:1px solid #e5e7eb; font-weight:700; display:flex; justify-content:space-between; align-items:center; background: white; flex: 0 0 auto;">
                         <span>系统日志</span>
-                        <!-- 这里的筛选表单加入了 hidden tab 字段 -->
-                        <form action="{{ url_for('admin_dashboard') }}" method="get" style="display:flex; align-items:center; gap:5px;">
-                            <input type="hidden" name="tab" value="logs">
-                            <span style="font-size:12px; color:#6b7280;">每页显示:</span>
-                            <select name="limit" onchange="this.form.submit()" style="font-size:12px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db;">
-                                <option value="20" {% if limit == 20 %}selected{% endif %}>20</option>
-                                <option value="50" {% if limit == 50 %}selected{% endif %}>50</option>
-                                <option value="100" {% if limit == 100 %}selected{% endif %}>100</option>
-                            </select>
-                        </form>
+                        
+                        <div style="display:flex; gap: 15px; align-items:center;">
+                            <!-- 修改：调用新弹窗函数 -->
+                            <button onclick="openClearLogsModal()" class="table-btn delete" style="border:1px solid #fecaca; background:#fff1f2;">
+                                <i class="fa-solid fa-trash-can"></i> 清空日志
+                            </button>
+
+                            <form action="{{ url_for('admin_dashboard') }}" method="get" style="display:flex; align-items:center; gap:5px;">
+                                <input type="hidden" name="tab" value="logs">
+                                <span style="font-size:12px; color:#6b7280;">每页显示:</span>
+                                <select name="limit" onchange="this.form.submit()" style="font-size:12px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db;">
+                                    <option value="20" {% if limit == 20 %}selected{% endif %}>20</option>
+                                    <option value="50" {% if limit == 50 %}selected{% endif %}>50</option>
+                                    <option value="100" {% if limit == 100 %}selected{% endif %}>100</option>
+                                </select>
+                            </form>
+                        </div>
                     </div>
 
                     <div class="table-scroll-area">
@@ -256,9 +260,10 @@
                             <thead>
                                 <tr>
                                     <th width="160">时间</th>
-                                    <th width="100">动作</th>
+                                    <th width="120">动作</th>
                                     <th>相关文件 / 详情</th>
-                                    <th width="140">来源 IP</th>
+                                    <th width="200">来源 IP / 归属地</th>
+                                    <th width="150">设备类型</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -269,20 +274,26 @@
                                         {% if log.action == 'down' %}<span class="badge badge-blue">下载文件</span>
                                         {% elif log.action == 'view' %}<span class="badge badge-green">在线预览</span>
                                         {% elif log.action == 'share_down' %}<span class="badge" style="background:#f3e8ff; color:#7e22ce;">外链下载</span>
+                                        {% elif log.action == 'user_login' %}<span class="badge badge-yellow">用户登录</span>
+                                        {% elif log.action == 'admin_login' %}<span class="badge" style="background:#4f46e5; color:white;">管理员登录</span>
+                                        {% elif log.action == 'logout' %}<span class="badge" style="background:#9ca3af; color:white;">退出登录</span>
                                         {% elif log.action == 'login' %}<span class="badge badge-yellow">用户登录</span>
                                         {% else %}<span class="badge" style="background:#e5e7eb; color:#374151;">{{ log.action }}</span>{% endif %}
                                     </td>
                                     <td style="max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ log.filename }}">
                                         {{ log.filename }}
                                     </td>
-                                    <td style="font-family:monospace; font-size:12px;">{{ log.ip_address }}</td>
+                                    <td>
+                                        <div style="font-family:monospace; font-size:12px;">{{ log.ip_address }}</div>
+                                        <div style="font-size:11px; color:#9ca3af;">{{ log.ip_location or '未知' }}</div>
+                                    </td>
+                                    <td style="font-size:12px; color:#4b5563;">{{ log.device_type or '未知' }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                     
-                    <!-- 分页控件：链接中加入了 tab='logs' -->
                     <div style="padding:15px; display:flex; justify-content:space-between; align-items:center; background:#f9fafb; border-top:1px solid #e5e7eb; flex: 0 0 auto; font-size:13px; color:#6b7280;">
                         <div>第 {{ pagination.page }} / {{ pagination.pages }} 页 (共 {{ pagination.total }} 条)</div>
                         <div style="display:flex; gap:5px;">
@@ -305,7 +316,7 @@
         </div>
     </div>
 
-    <!-- 弹窗部分 (保持不变) -->
+    <!-- 弹窗部分 -->
     <div id="editModal" class="modal-overlay" onclick="closeEditModal()">
         <div class="modal-card" style="width:400px; padding:20px; overflow:visible;" onclick="event.stopPropagation()">
             <h3 style="margin-top:0; margin-bottom:20px;">编辑分享链接</h3>
@@ -333,6 +344,7 @@
         </div>
     </div>
 
+    <!-- 删文件弹窗 -->
     <div id="deleteConfirmModal" class="modal-overlay" onclick="closeDeleteModal()">
         <div class="modal-card" style="width:350px; padding:20px; height:auto; align-items:flex-start;" onclick="event.stopPropagation()">
             <h3 style="margin-top:0; color:#ef4444; display:flex; align-items:center; gap:10px;">
@@ -346,13 +358,24 @@
         </div>
     </div>
 
+    <!-- 新增：清空日志确认弹窗 -->
+    <div id="clearLogsModal" class="modal-overlay" onclick="closeClearLogsModal()">
+        <div class="modal-card" style="width:350px; padding:20px; height:auto; align-items:flex-start;" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0; color:#ef4444; display:flex; align-items:center; gap:10px;">
+                <i class="fa-solid fa-radiation"></i> 清空日志
+            </h3>
+            <p style="margin:10px 0 20px 0; color:#4b5563;">确定要清空所有系统日志吗？<br><br><b>此操作不可恢复！</b></p>
+            <div style="display:flex; gap:10px; width:100%;">
+                <button onclick="executeClearLogs()" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:600;">确认清空</button>
+                <button onclick="closeClearLogsModal()" style="padding:10px 20px; background:white; color:#374151; border:1px solid #d1d5db; border-radius:8px; cursor:pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- 纯前端交互逻辑 ---
         
-        // Tab 切换只负责更新 URL (避免刷新) 和 DOM 类名
-        // 不再在页面加载时读取 localStorage，完全依赖 URL 参数
         function switchTab(tabName) {
-            // 更新 UI
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
             
@@ -363,13 +386,35 @@
             const pane = document.getElementById('tab-' + tabName);
             if(pane) pane.classList.add('active');
             
-            // 可选：静默更新 URL，方便用户刷新后停留（不跳转）
             const url = new URL(window.location);
             url.searchParams.set('tab', tabName);
             window.history.replaceState({}, '', url);
         }
 
-        // 弹窗相关逻辑保持不变
+        // 新增：清空日志弹窗控制
+        function openClearLogsModal() {
+            document.getElementById('clearLogsModal').style.display = 'flex';
+        }
+        function closeClearLogsModal() {
+            document.getElementById('clearLogsModal').style.display = 'none';
+        }
+        function executeClearLogs() {
+            fetch('/admin/logs/clear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            }).then(r => r.json()).then(data => {
+                closeClearLogsModal();
+                if(data.success) {
+                    window.location.reload();
+                } else {
+                    alert("操作失败: " + data.error);
+                }
+            }).catch(err => {
+                closeClearLogsModal();
+                alert("网络错误");
+            });
+        }
+
         function openEditModal(id, slug) {
             document.getElementById('editModal').style.display = 'flex';
             document.getElementById('editId').value = id;
