@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>文件管理</title>
-    <!-- 引入 FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 修改：使用本地 FontAwesome；优化(P2-4)：静态资源自动指纹 -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ static_versioned('fontawesome/css/all.min.css') }}">
     <!-- 引入 CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='mobile.css') }}?v=4.3">
+    <link rel="stylesheet" href="{{ static_versioned('mobile.css') }}">
 </head>
 <body>
+    <!-- ... 保持不变 ... -->
     <input type="hidden" id="currentPath" value="{{ current_path }}">
     
     <!-- 1. 顶部 App Bar -->
@@ -45,7 +48,7 @@
 
         {% for item in items %}
         <!-- 点击整个卡片触发逻辑 -->
-        <div class="file-card" onclick="handleItemTap('{{ item.name }}', '{{ item.rel_path }}', {{ 'true' if item.is_dir else 'false' }})">
+        <div class="file-card item-card" data-name="{{ item.name }}" data-path="{{ item.rel_path }}" data-dir="{{ 'true' if item.is_dir else 'false' }}">
             <!-- 图标 -->
             <div class="file-icon {{ item.type }}">
                 {% if item.is_dir %}<i class="fa-solid fa-folder"></i>
@@ -64,7 +67,7 @@
             </div>
 
             <!-- 更多操作按钮 (阻止冒泡，避免误触进入文件夹) -->
-            <button class="more-btn" onclick="event.stopPropagation(); openActionSheet('{{ item.name }}', '{{ item.rel_path }}', {{ 'true' if item.is_dir else 'false' }})">
+            <button class="more-btn item-more" data-name="{{ item.name }}" data-path="{{ item.rel_path }}" data-dir="{{ 'true' if item.is_dir else 'false' }}">
                 <i class="fa-solid fa-ellipsis"></i>
             </button>
         </div>
@@ -144,6 +147,6 @@
     <input type="file" id="mobileUploadInput" multiple style="display: none;">
     {% endif %}
 
-    <script src="{{ url_for('static', filename='mobile.js') }}?v=4.3"></script>
+    <script src="{{ static_versioned('mobile.js') }}"></script>
 </body>
 </html>

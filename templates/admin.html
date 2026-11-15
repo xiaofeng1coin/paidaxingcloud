@@ -3,10 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>管理后台</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4.0">
+    <!-- 修改：使用本地 FontAwesome；优化(P2-4)：静态资源自动指纹 -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ static_versioned('fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ static_versioned('style.css') }}">
     <style>
+        /* ... 保持原有样式 ... */
         /* ==== 头部按钮样式 ==== */
         .header-btn {
             display: inline-flex;
@@ -116,6 +120,7 @@
 </head>
 <body style="background-color: #f3f4f6;">
 
+    <!-- ... 保持原有 HTML 内容 ... -->
     {% set active_tab = request.args.get('tab', 'shares') %}
 
     <div class="admin-layout">
@@ -316,11 +321,12 @@
         </div>
     </div>
 
-    <!-- 弹窗部分 -->
+    <!-- 弹窗部分 ... (保持不变) -->
     <div id="editModal" class="modal-overlay" onclick="closeEditModal()">
         <div class="modal-card" style="width:400px; padding:20px; overflow:visible;" onclick="event.stopPropagation()">
             <h3 style="margin-top:0; margin-bottom:20px;">编辑分享链接</h3>
             <form action="{{ url_for('edit_share') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="id" id="editId">
                 <div style="margin-bottom: 15px;">
                     <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 5px;">自定义后缀</label>
@@ -374,7 +380,13 @@
 
     <script>
         // --- 纯前端交互逻辑 ---
-        
+
+        // CSRF 安全修复(P0-5)：token 由 head 的 meta 标签注入
+        function getCsrf() {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            return meta ? meta.content : '';
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
@@ -401,7 +413,7 @@
         function executeClearLogs() {
             fetch('/admin/logs/clear', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {'X-CSRF-Token': getCsrf(), 'Accept': 'application/json'}
             }).then(r => r.json()).then(data => {
                 closeClearLogsModal();
                 if(data.success) {
@@ -434,9 +446,15 @@
             deleteTargetId = null;
         }
         function executeDelete() {
-            if(deleteTargetId) {
-                window.location.href = "/admin/share/delete/" + deleteTargetId;
-            }
+            // 安全修复(P0-5)：删除分享由 GET 跳转改为 POST 请求
+            if(!deleteTargetId) return;
+            fetch("/admin/share/delete/" + deleteTargetId, {
+                method: 'POST',
+                headers: {'X-CSRF-Token': getCsrf(), 'Accept': 'application/json'}
+            }).then(r => r.json().catch(() => ({}))).then(data => {
+                if (data.success) window.location.reload();
+                else alert("删除失败: " + (data.error || '未知错误'));
+            }).catch(() => alert("网络错误"));
         }
     </script>
 </body>

@@ -4,11 +4,27 @@ let currentItem = null; // 当前选中的文件对象 {name, path, isDir}
 
 function getPath() { return document.getElementById('currentPath').value; }
 
+// 优化(P2-11)：路径分段 URL 编码，文件名含 # ? 空格 中文时下载/预览不再 404
+function safeUrl(prefix, relPath) {
+    return prefix + relPath.split('/').map(encodeURIComponent).join('/');
+}
+
+// ================= CSRF 安全修复(P0-5) =================
+// token 由模板 head 的 meta 标签注入，与后端会话绑定
+function getCsrf() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+}
+
+function getCsrfHeaders() {
+    return {'X-CSRF-Token': getCsrf(), 'Accept': 'application/json'};
+}
+
 // 点击列表项
 function handleItemTap(name, relPath, isDir) {
     if (isDir) {
         // 如果是文件夹，直接进入 (带上 view=mobile 保持视图)
-        window.location.href = '/' + relPath + '?view=mobile';
+        window.location.href = safeUrl('/', relPath) + '?view=mobile';
     } else {
         // 如果是文件，打开操作菜单
         openActionSheet(name, relPath, isDir);
@@ -41,14 +57,14 @@ function closeActionSheet() {
 function execDownload() {
     if(!currentItem) return;
     if(currentItem.isDir) { alert('手机端暂不支持文件夹打包下载'); return; }
-    window.location.href = '/download/' + currentItem.relPath;
+    window.location.href = safeUrl('/download/', currentItem.relPath);
     closeActionSheet();
 }
 
 function execPreview() {
     if(!currentItem) return;
     if(currentItem.isDir) return;
-    window.location.href = '/view/' + currentItem.relPath;
+    window.location.href = safeUrl('/view/', currentItem.relPath);
     closeActionSheet();
 }
 
@@ -58,7 +74,7 @@ function execRename() {
     if(newName && newName !== currentItem.name) {
         fetch('/admin/file/rename', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: Object.assign({'Content-Type': 'application/json'}, getCsrfHeaders()),
             body: JSON.stringify({ 
                 path: getPath(), 
                 old_name: currentItem.name, 
@@ -77,7 +93,7 @@ function execDelete() {
     if(confirm(`确定要删除 "${currentItem.name}" 吗?`)) {
         fetch('/admin/file/delete', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: Object.assign({'Content-Type': 'application/json'}, getCsrfHeaders()),
             body: JSON.stringify({ 
                 path: getPath(), 
                 filenames: [currentItem.name] 
@@ -107,7 +123,7 @@ function createNewFolder() {
     if(name) {
         fetch('/admin/file/mkdir', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: Object.assign({'Content-Type': 'application/json'}, getCsrfHeaders()),
             body: JSON.stringify({ path: getPath(), name: name })
         }).then(r => r.json()).then(data => {
             if(data.success) window.location.reload();
@@ -134,9 +150,11 @@ if(upInput) {
         const formData = new FormData();
         formData.append('path', getPath());
         for (let i = 0; i < this.files.length; i++) formData.append('files', this.files[i]);
+        this.value = ''; // 优化(P2-10)：上传失败后可重选同一文件
 
         fetch("/admin/file/upload", {
             method: "POST",
+            headers: getCsrfHeaders(),
             body: formData
         }).then(r => r.json()).then(data => {
             if(data.success) window.location.reload();
@@ -150,3 +168,20 @@ if(upInput) {
         });
     });
 }
+
+// ================= 安全修复(P1-2)：文件名不再嵌入 onclick 字符串，统一事件委托 =================
+// 列表卡片与更多按钮通过 data-* 属性传参，此处按 class 分发
+document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('click', function (e) {
+        const more = e.target.closest('.item-more');
+        if (more) {
+            e.stopPropagation();
+            openActionSheet(more.dataset.name, more.dataset.path, more.dataset.dir === 'true');
+            return;
+        }
+        const card = e.target.closest('.item-card');
+        if (card) {
+            handleItemTap(card.dataset.name, card.dataset.path, card.dataset.dir === 'true');
+        }
+    });
+});

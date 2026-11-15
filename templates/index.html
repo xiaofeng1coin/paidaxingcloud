@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>文件共享空间</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3.5">
+    <!-- 修改：使用本地 FontAwesome；优化(P2-4)：静态资源自动指纹 -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ static_versioned('fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ static_versioned('style.css') }}">
 </head>
 <body class="index-page">
 
@@ -13,6 +16,7 @@
     <input type="file" id="uploadInput" multiple style="display: none;">
 
     <div class="layout-container">
+        <!-- ... 保持原有侧边栏内容 ... -->
         <aside class="sidebar">
             <div class="brand">
                 <i class="fa-brands fa-dropbox"></i>
@@ -69,6 +73,7 @@
         </aside>
 
         <main class="main-content">
+            <!-- ... 保持原有主要内容 ... -->
             <header class="toolbar">
                 <div class="breadcrumb">
                     <a href="{{ url_for('index') }}"><i class="fa-solid fa-house"></i></a>
@@ -140,7 +145,7 @@
                             {% if item.is_dir %}
                                 <a href="{{ url_for('index', req_path=item.rel_path) }}">{{ item.name }}</a>
                             {% else %}
-                                <a href="#" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}'); return false;">{{ item.name }}</a>
+                                <a href="#" class="preview-trigger" data-name="{{ item.name }}" data-type="{{ item.type }}" data-view="{{ url_for('view', req_path=item.rel_path) }}" data-dl="{{ url_for('download', req_path=item.rel_path) }}">{{ item.name }}</a>
                             {% endif %}
                         </div>
 
@@ -148,11 +153,11 @@
                         <div class="file-meta" style="font-size:12px;">{{ item.mtime }}</div>
                         <div class="actions">
                             {% if not item.is_dir %}
-                                <button class="action-btn" title="预览" onclick="openPreview('{{ item.name }}', '{{ item.type }}', '{{ url_for('view', req_path=item.rel_path) }}', '{{ url_for('download', req_path=item.rel_path) }}')"><i class="fa-solid fa-eye"></i></button>
+                                <button class="action-btn preview-trigger" title="预览" data-name="{{ item.name }}" data-type="{{ item.type }}" data-view="{{ url_for('view', req_path=item.rel_path) }}" data-dl="{{ url_for('download', req_path=item.rel_path) }}"><i class="fa-solid fa-eye"></i></button>
                                 <a href="{{ url_for('download', req_path=item.rel_path) }}" class="action-btn" title="下载"><i class="fa-solid fa-download"></i></a>
-                                <button class="action-btn" title="扫码" onclick="showQR('{{ url_for('download', req_path=item.rel_path, _external=True) }}')"><i class="fa-solid fa-qrcode"></i></button>
+                                <button class="action-btn qr-trigger" title="扫码" data-url="{{ url_for('download', req_path=item.rel_path, _external=True) }}"><i class="fa-solid fa-qrcode"></i></button>
                                 {% if is_admin %}
-                                <button class="action-btn share-btn" title="分享外链" onclick="openShareModal('{{ item.rel_path }}', '{{ item.name }}')">
+                                <button class="action-btn share-btn" title="分享外链" data-path="{{ item.rel_path }}" data-name="{{ item.name }}">
                                     <i class="fa-solid fa-share-nodes"></i>
                                 </button>
                                 {% endif %}
@@ -160,8 +165,8 @@
                             
                             <!-- 管理员操作：重命名/删除 -->
                             {% if is_admin %}
-                            <button class="action-btn" title="重命名" onclick="openRenameModal('{{ item.name }}')"><i class="fa-solid fa-pen"></i></button>
-                            <button class="action-btn" title="删除" style="color:#ef4444;" onclick="deleteSingle('{{ item.name }}')"><i class="fa-solid fa-trash"></i></button>
+                            <button class="action-btn rename-trigger" title="重命名" data-name="{{ item.name }}"><i class="fa-solid fa-pen"></i></button>
+                            <button class="action-btn delete-trigger" title="删除" style="color:#ef4444;" data-name="{{ item.name }}"><i class="fa-solid fa-trash"></i></button>
                             {% endif %}
                         </div>
                     </div>
@@ -178,21 +183,18 @@
         </main>
     </div>
 
-    <!-- 底部选择栏 -->
+    <!-- 底部选择栏及弹窗代码保持不变 ... -->
     <div id="selectionBar" class="selection-bar">
         <div class="selection-count">已选 <span id="selectCount" style="font-weight:700; color:#60a5fa;">0</span> 个</div>
         <div class="selection-actions">
             <button onclick="downloadSelectedFiles()"><i class="fa-solid fa-download"></i> 下载</button>
             {% if is_admin %}
-            <!-- 管理员批量操作 -->
             <button onclick="deleteSelectedFiles()" style="color:#ef4444;"><i class="fa-solid fa-trash"></i> 删除</button>
             {% endif %}
             <button onclick="clearSelection()" style="background:transparent; color:#bbb; border:1px solid #666;">取消</button>
         </div>
     </div>
 
-    <!-- 弹窗部分 -->
-    
     <!-- 预览弹窗 -->
     <div id="previewModal" class="modal-overlay" onclick="closeModal('previewModal')">
         <div class="modal-card" onclick="event.stopPropagation()">
@@ -295,7 +297,7 @@
         </div>
     </div>
 
-    <!-- 删除确认弹窗 (新增) -->
+    <!-- 删除确认弹窗 -->
     <div id="deleteFileModal" class="modal-overlay" onclick="closeDeleteFileModal()">
         <div class="modal-card" style="width:350px; padding:20px; height:auto; overflow:visible;" onclick="event.stopPropagation()">
             <h3 style="margin-top:0; color: #ef4444; display:flex; align-items:center; gap:10px;">
@@ -311,7 +313,8 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="{{ url_for('static', filename='main.js') }}?v=3.5"></script>
+    <!-- 修改：使用本地 QRCode.js -->
+    <script src="{{ static_versioned('js/qrcode.min.js') }}"></script>
+    <script src="{{ static_versioned('main.js') }}"></script>
 </body>
 </html>

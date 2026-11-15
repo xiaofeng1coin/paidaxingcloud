@@ -4,10 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引用本地 FontAwesome；优化(P2-4)：静态资源自动指纹 -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ static_versioned('fontawesome/css/all.min.css') }}">
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            /* 增加中文字体支持 */
+            font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", "Heiti SC", "Segoe UI", Roboto, sans-serif;
             background: #f3f4f6;
             display: flex;
             justify-content: center;
@@ -29,20 +32,44 @@
         .brand span { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #111827; }
         .subtitle { color: #6b7280; font-size: 14px; margin: 8px 0 32px 0; }
 
-        input[type="password"] {
+        /* 新增：密码框包裹层，用于定位图标 */
+        .password-wrapper {
+            position: relative;
             width: 100%;
-            padding: 14px;
+            margin-bottom: 24px;
+        }
+
+        input {
+            width: 100%;
+            /* 右侧留出 45px 给眼睛图标，避免文字重叠 */
+            padding: 14px 45px 14px 14px;
             border: 2px solid #e5e7eb;
             border-radius: 12px;
             font-size: 16px;
             box-sizing: border-box;
-            margin-bottom: 24px;
             outline: none;
             transition: 0.2s;
-            text-align: center;
-            letter-spacing: 2px;
+            text-align: center; /* 文字居中 */
+            background: white;
+            color: #1f2937;
+            /* 移除 letter-spacing 以防止中文显示间距过大 */
+            letter-spacing: normal;
         }
-        input[type="password"]:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+        input:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+
+        /* 新增：眼睛图标样式 */
+        .toggle-password {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 18px;
+            padding: 5px; /* 增大点击热区 */
+        }
+        .toggle-password:hover { color: #2563eb; }
 
         button {
             width: 100%;
@@ -90,7 +117,13 @@
         {% endwith %}
 
         <form method="POST">
-            <input type="password" name="password" placeholder="••••••" required autofocus autocomplete="off">
+            <!-- 修改结构：包裹层 + 输入框 + 图标 -->
+            <div class="password-wrapper">
+                <input type="password" id="pwdInput" name="password" placeholder="请输入口令" required autofocus autocomplete="off">
+                <!-- 这里的 fa-eye 依赖于本地 FontAwesome 文件 -->
+                <i class="fa-solid fa-eye toggle-password" id="toggleIcon" onclick="togglePassword()" title="显示/隐藏口令"></i>
+            </div>
+            
             <button type="submit">进入系统</button>
         </form>
 
@@ -98,5 +131,28 @@
             <a href="{{ url_for('index') }}" class="back-link">← 返回文件列表</a>
         {% endif %}
     </div>
+
+    <!-- 脚本：控制显示/隐藏 -->
+    <script>
+        function togglePassword() {
+            const input = document.getElementById('pwdInput');
+            const icon = document.getElementById('toggleIcon');
+            
+            if (input.type === "password") {
+                // 切换为文本模式：此时浏览器允许输入中文
+                input.type = "text";
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+                // 保持光标在输入框内
+                input.focus();
+            } else {
+                // 切换回密码模式
+                input.type = "password";
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+                input.focus();
+            }
+        }
+    </script>
 </body>
 </html>
