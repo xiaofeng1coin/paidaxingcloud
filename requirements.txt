@@ -5,4 +5,4 @@ SQLAlchemy==2.0.36
 markdown==3.4.4
 gunicorn==23.0.0
 requests==2.32.4
-nh3==0.1.19
+nh3==0.2.22

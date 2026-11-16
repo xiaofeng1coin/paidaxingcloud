@@ -1111,12 +1111,14 @@ def index(req_path):
                         with open(entry.path, 'r', encoding='utf-8') as f:
                             raw_html = markdown.markdown(f.read(), extensions=['fenced_code', 'tables'])
                             # 安全修复(P1-2/H4)：白名单消毒（nh3 替代已停止维护的 bleach）
+                            # 注意：nh3/ammonia 自动管理 <a> 的 rel 属性（自动追加 noopener），
+                            # attributes 中手动指定 rel 会触发底层断言崩溃，故不包含 rel
                             readme_content = nh3.clean(
                                 raw_html,
                                 tags={'h1','h2','h3','h4','h5','h6','p','a','b','strong','i','em','u','s',
                                       'blockquote','ul','ol','li','code','pre','table','thead','tbody','tr','th','td',
                                       'img','br','hr','span','div','sup','sub'},
-                                attributes={'a': {'href','title','target','rel'},
+                                attributes={'a': {'href','title','target'},
                                             'img': {'src','alt','title','width','height'},
                                             '*': {'class','id'}},
                                 url_schemes={'http','https','mailto'},
