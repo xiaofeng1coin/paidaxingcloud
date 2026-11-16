@@ -132,7 +132,7 @@
                 </div>
                 <div style="display:flex; gap:10px;">
                     <a href="{{ url_for('index') }}" class="header-btn">返回前台</a>
-                    <a href="{{ url_for('logout') }}" class="header-btn logout">退出</a>
+                    <a href="#" class="header-btn logout" onclick="doLogout(); return false;">退出</a>
                 </div>
             </header>
 
@@ -220,10 +220,11 @@
                                     <td>{{ share.downloads }}</td>
                                     <td>
                                         <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
-                                            <button class="table-btn edit" onclick="openEditModal('{{ share.id }}', '{{ share.slug }}')">
+                                            <!-- 安全修复(M1)：slug 改走 data-* 属性，不再进入 onclick 字符串 -->
+                                            <button class="table-btn edit share-edit-trigger" data-id="{{ share.id }}" data-slug="{{ share.slug }}">
                                                 <i class="fa-solid fa-pen-to-square"></i> 编辑
                                             </button>
-                                            <button class="table-btn delete" onclick="openDeleteModal('{{ share.id }}')">
+                                            <button class="table-btn delete share-delete-trigger" data-id="{{ share.id }}">
                                                 <i class="fa-solid fa-trash"></i> 删除
                                             </button>
                                         </div>
@@ -385,6 +386,23 @@
         function getCsrf() {
             const meta = document.querySelector('meta[name="csrf-token"]');
             return meta ? meta.content : '';
+        }
+
+        // 安全修复(M1)：编辑/删除按钮改事件委托，slug 不再进入 onclick 字符串
+        document.addEventListener('DOMContentLoaded', function () {
+            document.body.addEventListener('click', function (e) {
+                const editBtn = e.target.closest('.share-edit-trigger');
+                if (editBtn) { openEditModal(editBtn.dataset.id, editBtn.dataset.slug); return; }
+                const delBtn = e.target.closest('.share-delete-trigger');
+                if (delBtn) { openDeleteModal(delBtn.dataset.id); return; }
+            });
+        });
+
+        // 安全修复(L10)：登出改为 POST；安全修复(N6)：携带会话 CSRF 令牌
+        function doLogout() {
+            fetch('/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() } })
+                .catch(() => {})
+                .finally(() => { window.location.href = '/'; });
         }
 
         function switchTab(tabName) {

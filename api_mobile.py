@@ -1,23 +1,14 @@
 from flask import Blueprint, request, jsonify, session
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 api_bp = Blueprint('api_mobile', __name__, url_prefix='/api/mobile')
 
 
-def _get_client_ip():
-    """获取客户端真实 IP（与主站 get_real_ip 逻辑一致）"""
-    if 'CF-Connecting-IP' in request.headers:
-        return request.headers.get('CF-Connecting-IP')
-    if 'X-Forwarded-For' in request.headers:
-        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    return request.remote_addr
-
-
 def _get_beijing_time():
-    """修复(P1-4)：北京时间 (UTC+8)，与主站 get_beijing_time 保持一致"""
-    return datetime.utcnow() + timedelta(hours=8)
+    """修复(P1-4/L6)：北京时间 (UTC+8)，与主站一致；now(timezone.utc) 替代已弃用 utcnow"""
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8)
 
 
 def _safe_resolve(base_dir, req_path):
@@ -32,15 +23,18 @@ def _safe_resolve(base_dir, req_path):
 
 def init_mobile_api(app, base_dir, get_config_func, get_file_type_func, human_size_func,
                     db, DownloadLog, SystemStat, FileShare, get_disk_usage_func, get_archived_stat_func,
-                    login_guard=None, log_activity_func=None, get_csrf_token_func=None):
+                    login_guard=None, log_activity_func=None, get_csrf_token_func=None,
+                    get_real_ip_func=None):
 
     @api_bp.route('/login', methods=['POST'])
     def mobile_login():
         # 安全修复：request.json 判空，避免非 JSON 请求导致 500
         data = request.get_json(silent=True) or {}
-        password = data.get('password', '')
+        # 修复(F2)：与 Web 端一致的口令处理（strip），同一口令两端行为不再不一致
+        password = (data.get('password') or '').strip()
         is_admin_login = bool(data.get('is_admin', False))
-        client_ip = _get_client_ip()
+        # 安全修复(H1)：移动端登录的 IP 解析与主站同一套可信代理逻辑（复审 10.4.7：死代码 _get_client_ip 已删除）
+        client_ip = get_real_ip_func() if get_real_ip_func else (request.remote_addr or '')
 
         # 安全修复(P0-4)：接入登录防爆破（与主站共用同一份失败记录）
         if login_guard:
@@ -53,6 +47,7 @@ def init_mobile_api(app, base_dir, get_config_func, get_file_type_func, human_si
             if secrets.compare_digest(password.encode('utf-8'), config['admin_password'].encode('utf-8')):
                 if login_guard: login_guard.record_success(client_ip)
                 session['is_admin'] = True
+                session['is_verified'] = True  # 修复(F1)：管理员下载/预览/搜索与 Web 端行为一致
                 session.permanent = True  # 优化(P2-9)：7 天免登录
                 # 安全修复(P0-4)：移动端登录也写入日志，便于审计
                 if log_activity_func: log_activity_func('移动端管理员登录', 'admin_login')
@@ -109,14 +104,20 @@ def init_mobile_api(app, base_dir, get_config_func, get_file_type_func, human_si
     def mobile_dashboard():
         if not session.get('is_admin'): return jsonify({'error': '无权操作'}), 403
 
-        current_downloads = DownloadLog.query.filter_by(action='down').count()
+        # 优化(O2)：合并为一条 GROUP BY 查询
+        action_counts = dict(
+            db.session.query(DownloadLog.action, db.func.count(DownloadLog.id))
+            .group_by(DownloadLog.action).all()
+        )
+        current_downloads = action_counts.get('down', 0)
+        current_views = action_counts.get('view', 0)
+        current_logins = action_counts.get('login', 0) + action_counts.get('user_login', 0)
         archived_downloads = get_archived_stat_func('total_downloads')
-        current_views = DownloadLog.query.filter_by(action='view').count()
         archived_views = get_archived_stat_func('total_views')
-        current_logins = DownloadLog.query.filter(DownloadLog.action.in_(['login', 'user_login'])).count()
         archived_logins = get_archived_stat_func('total_logins')
 
-        shares = FileShare.query.order_by(FileShare.created_at.desc()).all()
+        # 优化(O6)：与后台一致限制单次返回数量
+        shares = FileShare.query.order_by(FileShare.created_at.desc()).limit(500).all()
         share_list = []
         now = _get_beijing_time()  # 修复(P1-4)：与存储的北京时间一致，过期判定不再延后 8 小时
         for s in shares:

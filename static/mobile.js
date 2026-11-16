@@ -20,6 +20,13 @@ function getCsrfHeaders() {
     return {'X-CSRF-Token': getCsrf(), 'Accept': 'application/json'};
 }
 
+// 安全修复(L10)：登出改为 POST；安全修复(N6)：携带会话 CSRF 令牌
+function doLogout() {
+    fetch('/logout', { method: 'POST', headers: { 'X-CSRF-Token': getCsrf() } })
+        .catch(() => {})
+        .finally(() => { window.location.href = '/'; });
+}
+
 // 点击列表项
 function handleItemTap(name, relPath, isDir) {
     if (isDir) {

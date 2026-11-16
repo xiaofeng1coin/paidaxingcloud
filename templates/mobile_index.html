@@ -72,7 +72,15 @@
             </button>
         </div>
         {% endfor %}
-        
+
+        {% if readme %}
+        <!-- 修复(L5)：手机端补齐 README 渲染（服务端已消毒） -->
+        <div style="background:#fff; margin:0 16px 16px; padding:14px; border-radius:12px;">
+            <div style="font-size:14px; font-weight:bold; margin-bottom:8px; color:#1C1C1E;">README</div>
+            <div class="markdown-body" style="font-size:13px; line-height:1.6; word-break:break-all; color:#333;">{{ readme | safe }}</div>
+        </div>
+        {% endif %}
+
         <div style="height: 60px;"></div>
     </main>
 
@@ -136,8 +144,8 @@
             </div>
             {% endif %}
 
-            <!-- 通用：退出登录 -->
-            <div class="menu-item" onclick="location.href='{{ url_for('logout') }}'" style="color:#ff3b30;">
+            <!-- 通用：退出登录（安全修复 L10：改为 POST） -->
+            <div class="menu-item" onclick="doLogout()" style="color:#ff3b30;">
                 <i class="fa-solid fa-arrow-right-from-bracket"></i> 退出登录
             </div>
         </div>
